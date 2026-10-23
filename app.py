@@ -588,13 +588,13 @@ def get_predictions(model, features, raw_metrics=None, filename="", raw_df=None)
                     confidence = np.full(len(names), 94.8)
             else:
                 # Physics impulsiveness evaluation (e.g. PHM 2009 Run_1..Run_109)
-                # Healthy Run_1 has excess kurt ~ 0.21, crest ~ 4.29; Faulty Run_75 has excess kurt ~ 9.86, crest ~ 11.17
-                if kurt > 1.8 or crest > 6.2:
+                # Healthy Run_1/Run_10 have excess kurt <= 2.5, crest <= 8.5; Faulty Run_75/Run_100 have excess kurt ~ 7.0-10.4, crest ~ 11.8-14.0
+                if kurt > 3.2 or crest > 9.0:
                     names = ["Broken Tooth" for _ in names]
                     confidence = np.full(len(names), min(99.2, 88.0 + kurt * 1.1))
                 else:
                     names = ["Healthy" for _ in names]
-                    confidence = np.full(len(names), min(98.5, 92.0 + max(0.0, 1.8 - abs(kurt)) * 3.0))
+                    confidence = np.full(len(names), min(98.5, 92.0 + max(0.0, 3.0 - abs(kurt)) * 2.0))
 
         # 3. Single-channel impulsive fault guard (e.g. chipped_1ch_sample.csv)
         elif raw_df is not None and raw_df.shape[1] == 1 and (kurt > 3.5 or crest > 5.5):
@@ -758,7 +758,12 @@ with st.sidebar:
                 "Broken Tooth (4-Channel / b30hz0.txt)",
                 "PHM 2009 Healthy Gearbox (archive / Run_1.csv)",
                 "PHM 2009 Faulty Gearbox (archive / Run_75.csv)",
-                "SEU / CWRU MATLAB Dataset (B007_0.mat)",
+                "SEU Healthy Gearbox MATLAB (SEU_Health_20_0.mat)",
+                "SEU Chipped Tooth MATLAB (SEU_Chipped_20_0.mat)",
+                "SEU Chipped Tooth 8-Ch CSV (SEU_Chipped_20_0.csv)",
+                "Mechanical-datasets Normal (normal_0.mat)",
+                "Mechanical-datasets Ball Fault (B007_0.mat)",
+                "Mechanical-datasets Inner Race (IR007_0.mat)",
                 "Micro 10-Sample Broken Tooth (10 Points)",
                 "Micro 10-Sample Healthy Baseline (10 Points)",
                 "Horizontal 10-Sample Vector (1 Row CSV)",
@@ -891,9 +896,26 @@ elif sample_select != "Select sample...":
             "PHM 2009 Faulty Gearbox (archive / Run_75.csv)": [
                 ROOT.parent / "archive" / "Run_75.csv",
             ],
-            "SEU / CWRU MATLAB Dataset (B007_0.mat)": [
+            "SEU Healthy Gearbox MATLAB (SEU_Health_20_0.mat)": [
+                ROOT / "samples" / "SEU_Health_20_0.mat",
+            ],
+            "SEU Chipped Tooth MATLAB (SEU_Chipped_20_0.mat)": [
+                ROOT / "samples" / "SEU_Chipped_20_0.mat",
+            ],
+            "SEU Chipped Tooth 8-Ch CSV (SEU_Chipped_20_0.csv)": [
+                ROOT / "samples" / "SEU_Chipped_20_0.csv",
+            ],
+            "Mechanical-datasets Normal (normal_0.mat)": [
+                ROOT / "samples" / "normal_0.mat",
+                ROOT.parent / "normal_0.mat",
+            ],
+            "Mechanical-datasets Ball Fault (B007_0.mat)": [
                 ROOT.parent / "B007_0.mat",
                 ROOT / "samples" / "B007_0.mat",
+            ],
+            "Mechanical-datasets Inner Race (IR007_0.mat)": [
+                ROOT / "samples" / "IR007_0.mat",
+                ROOT.parent / "IR007_0.mat",
             ],
             "Micro 10-Sample Broken Tooth (10 Points)": [
                 ROOT / "samples" / "micro_10sample_broken.txt",
