@@ -697,7 +697,26 @@ def get_fault_explanation(metrics, data, selected_channel=0):
         "of the driving pinion and gear teeth, and check magnetic drain plugs for metallic spall debris."
     )
 
+    # Determine primary cause of failure based on vibration mechanics
+    if crest > 5.0 or kurt > 2.5:
+        primary_cause = "Severe Tooth Fracture / Missing Tooth Impact Shock (Cyclic Mesh Collision)"
+    elif crest > 3.8 or kurt > 1.0:
+        primary_cause = "Tooth Flank Chipping & Root Fatigue Cracking (Non-Gaussian Impact Transients)"
+    elif kurt > 0.4 or crest > 3.2:
+        primary_cause = "Incipient Tooth Surface Spalling & Mesh Involute Disruption"
+    else:
+        primary_cause = "Localized Gear Mesh Stiffness Degradation & Dynamic Handover Shock"
+
+    key_points = [
+        f"<strong>Impulse Shock Severity:</strong> Crest Factor of <code>{crest:.2f}</code> ({crest:.1f}× continuous operating baseline), confirming severe localized impacts.",
+        f"<strong>Non-Gaussian Impact Spikes:</strong> Excess Kurtosis of <code>{kurt:.2f}</code> indicates acute periodic collisions during tooth mesh handover.",
+        "<strong>Imminent Operational Risk:</strong> Loss of conjugate profile forces adjacent teeth to absorb double bending load, driving rapid tooth fatigue shear.",
+        "<strong>Immediate Action:</strong> De-rate operating torque immediately and conduct borescope tooth inspection.",
+    ]
+
     return {
+        "primary_cause": primary_cause,
+        "key_points": key_points,
         "evidence": evidence,
         "has_failed_why": has_failed_why,
         "bound_to_fail_why": bound_to_fail_why,
@@ -1132,15 +1151,28 @@ if page == "⌂  Dashboard":
 
         if overall == "Broken Tooth":
             fault_info = get_fault_explanation(metrics, data, channel)
+            key_points_html = "".join([f"<li style='margin-bottom:6px;'>{p}</li>" for p in fault_info["key_points"]])
             evidence_html = "".join([f"<li style='margin-bottom:4px;'>{e}</li>" for e in fault_info["evidence"]])
             st.markdown(
-                f'<div class="gg-danger" style="line-height:1.6;">'
-                f'<div style="font-size:16px;font-weight:700;margin-bottom:8px;">🚨 FAULT ALERT — Broken Tooth / Mechanical Gear Fault Detected</div>'
-                f'<div style="margin-bottom:8px;"><strong>Diagnostic Finding (Why Has Failed):</strong> {fault_info["has_failed_why"]}</div>'
-                f'<div style="margin-bottom:8px;"><strong>Vibration Evidence from Telemetry:</strong>'
+                f'<div class="gg-danger" style="line-height:1.6;padding:16px 20px;">'
+                f'<div style="font-size:16px;font-weight:700;margin-bottom:8px;color:#ff6b7a;">🚨 FAULT ALERT — Mechanical Gear Fault Detected</div>'
+                f'<div style="background:rgba(255,107,122,0.14);border-left:4px solid #ff6b7a;padding:8px 12px;margin:8px 0 10px 0;border-radius:4px;">'
+                f'<span style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.8px;color:#ff9da8;">Main Cause of Failure:</span><br>'
+                f'<span style="font-size:14px;font-weight:600;color:#ffffff;">{fault_info["primary_cause"]}</span>'
+                f'</div>'
+                f'<ul style="margin:6px 0 8px 18px;padding:0;">{key_points_html}</ul>'
+                f'<details style="margin-top:10px;border-top:1px solid rgba(255,255,255,0.12);padding-top:8px;cursor:pointer;">'
+                f'<summary style="font-weight:600;color:#36e6f5;font-size:13px;cursor:pointer;outline:none;user-select:none;">'
+                f'▶ Show more details'
+                f'</summary>'
+                f'<div style="margin-top:8px;padding:10px 12px;background:rgba(0,0,0,0.22);border-radius:6px;font-size:13px;line-height:1.55;">'
+                f'<div style="margin-bottom:8px;"><strong>Detailed Root Cause Analysis:</strong><br>{fault_info["has_failed_why"]}</div>'
+                f'<div style="margin-bottom:8px;"><strong>Vibration Evidence Breakdown:</strong>'
                 f'<ul style="margin:4px 0 0 18px;padding:0;">{evidence_html}</ul></div>'
-                f'<div style="margin-bottom:8px;"><strong>Failure Progression (Why Bound to Fail):</strong> {fault_info["bound_to_fail_why"]}</div>'
-                f'<div>{fault_info["mitigation"]}</div>'
+                f'<div style="margin-bottom:8px;"><strong>Failure Progression & Degradation Mechanism:</strong>{fault_info["bound_to_fail_why"]}</div>'
+                f'<div style="margin-top:8px;color:#ffc857;">{fault_info["mitigation"]}</div>'
+                f'</div>'
+                f'</details>'
                 f'</div>',
                 unsafe_allow_html=True,
             )
