@@ -810,8 +810,14 @@ with st.sidebar:
 
     page = st.radio(
         "NAVIGATION",
-        ["⌂  Dashboard", "▥  Signal Analytics",
-         "▦  Fleet Monitor", "▤  Diagnosis Log", "⚙  Configuration"],
+        [
+            "⌂  Dashboard",
+            "▥  Signal Analytics",
+            "📡  Sensors & Accelerometers",
+            "▦  Fleet Monitor",
+            "▤  Diagnosis Log",
+            "⚙  Configuration",
+        ],
         label_visibility="collapsed",
     )
 
@@ -1354,6 +1360,131 @@ elif page == "▥  Signal Analytics":
             file_name="gearguard_segment_predictions.csv",
             mime="text/csv",
         )
+
+
+# ----------------- SENSORS & ACCELEROMETERS ------------------
+
+elif page == "📡  Sensors & Accelerometers":
+    st.subheader("Sensors & Accelerometer Architecture")
+    st.caption("PHYSICAL TRANSDUCER SPECIFICATIONS, MOUNTING GEOMETRY & TELEMETRY HARDWARE")
+
+    st.markdown("### Active Telemetry Sensor Overview")
+    if data is not None and not data.empty and not processing_error:
+        n_ch = data.shape[1]
+        ch_stds = [float(np.std(data.iloc[:, i])) for i in range(n_ch)]
+        max_ch_idx = int(np.argmax(ch_stds))
+        peak_g = float(np.max(np.abs(data.to_numpy())))
+        nyquist = sample_rate / 2.0
+
+        sc1, sc2, sc3, sc4 = st.columns(4)
+        with sc1:
+            render_metric_card("Active Sensor Channels", f"{n_ch} Accelerometer{'s' if n_ch > 1 else ''}", subtext="Synchronous Telemetry")
+        with sc2:
+            render_metric_card("Max Dynamic Peak", f"{peak_g:.4g} g", color="#ffc857", subtext="Recorded Transient Excursion")
+        with sc3:
+            render_metric_card("Highest Energy Transducer", f"Channel {max_ch_idx + 1}", color="#36e6f5", subtext=f"Std: {ch_stds[max_ch_idx]:.4g} g")
+        with sc4:
+            render_metric_card("Nyquist Bandwidth", f"{nyquist/1000:.1f} kHz", subtext=f"Fs: {sample_rate:,.0f} Hz")
+
+        st.markdown("#### Live Sensor Channel Telemetry Diagnostics")
+        sensor_rows = []
+        for i in range(n_ch):
+            arr_i = data.iloc[:, i].to_numpy(dtype=float)
+            arr_i_ac = arr_i - np.mean(arr_i)
+            c_rms = float(np.sqrt(np.mean(arr_i_ac ** 2)))
+            c_peak = float(np.max(np.abs(arr_i_ac)))
+            c_crest = c_peak / (c_rms + 1e-12) if c_rms > 1e-12 else 0.0
+            c_kurt = float(kurtosis(arr_i_ac, fisher=True, bias=False)) if len(arr_i_ac) >= 4 else 0.0
+            status = "CRITICAL (Impact Shock)" if (c_crest > 4.5 or c_kurt > 2.0) else ("ELEVATED" if (c_crest > 3.5 or c_kurt > 1.0) else "NOMINAL")
+            sensor_rows.append({
+                "Channel": f"Channel {i + 1}",
+                "Sensor Type": "Piezoelectric Accelerometer",
+                "RMS Acceleration (g)": f"{c_rms:.4g}",
+                "Peak Excursion (g)": f"{c_peak:.4g}",
+                "Crest Factor": f"{c_crest:.2f}",
+                "Kurtosis (Excess)": f"{c_kurt:.2f}",
+                "Vibration Status": status,
+            })
+        st.dataframe(pd.DataFrame(sensor_rows), use_container_width=True, hide_index=True)
+    else:
+        st.info("💡 Load or upload a vibration recording to display live channel telemetry diagnostics.")
+
+    st.markdown("### Industrial Dataset Accelerometer Hardware Specifications")
+    st.markdown(
+        "Industrial gearbox diagnostics rely on high-frequency piezoelectric accelerometers to detect impact shockwaves "
+        "originating from broken, cracked, or chipped teeth before catastrophic gear tooth shear occurs."
+    )
+
+    t1, t2 = st.columns(2)
+    with t1:
+        st.markdown(
+            '<div class="gg-card">'
+            '<div class="gg-label">NASA / PHM 2009 GEARBOX CHALLENGE</div>'
+            '<div class="gg-value" style="font-size:19px;margin-bottom:8px;">Endevco 10 mV/g Piezoelectric System</div>'
+            '<p><strong>Hardware:</strong> Endevco Model 10 mV/g Accelerometers (±1% error, resonance > 45 kHz)</p>'
+            '<p><strong>Channel Configuration:</strong><br>'
+            '• <strong>Channel 1:</strong> Input Shaft Radial Accelerometer (Gearbox input bearing block)<br>'
+            '• <strong>Channel 2:</strong> Output Shaft Radial Accelerometer (Gearbox output bearing block)<br>'
+            '• <strong>Channel 3:</strong> Optical Tachometer Pickup (10 pulses/revolution speed reference)</p>'
+            '<p><strong>Acquisition Sampling Rate:</strong> 66,666.67 Hz (200 kHz / 3)</p>'
+            '<p><strong>Diagnostic Purpose:</strong> Measures high-frequency tooth mesh impacts across spur and helical stages under 30–50 Hz speed variations.</p>'
+            '</div>',
+            unsafe_allow_html=True,
+        )
+
+        st.markdown(
+            '<div class="gg-card" style="margin-top:15px;">'
+            '<div class="gg-label">SPECTRAQUEST DRIVETRAIN SIMULATOR</div>'
+            '<div class="gg-value" style="font-size:19px;margin-bottom:8px;">4-Channel Synchronous Accelerometers</div>'
+            '<p><strong>Hardware:</strong> Industrial ICP/IEPE Industrial Accelerometers</p>'
+            '<p><strong>Channel Placement:</strong><br>'
+            '• <strong>Channel 1:</strong> Motor Drive End (DE) casing<br>'
+            '• <strong>Channel 2:</strong> Gearbox input pinion bearing housing<br>'
+            '• <strong>Channel 3:</strong> Gearbox intermediate / driven wheel casing<br>'
+            '• <strong>Channel 4:</strong> Planetary / brake generator load stage</p>'
+            '<p><strong>Acquisition Sampling Rate:</strong> 20,000.0 Hz</p>'
+            '<p><strong>Calibrated Measurement:</strong> Dynamic acceleration in engineering units (g).</p>'
+            '</div>',
+            unsafe_allow_html=True,
+        )
+
+    with t2:
+        st.markdown(
+            '<div class="gg-card">'
+            '<div class="gg-label">SOUTHEAST UNIVERSITY (SEU) BENCHMARK</div>'
+            '<div class="gg-value" style="font-size:19px;margin-bottom:8px;">8-Channel Triaxial Synchronous Array</div>'
+            '<p><strong>Hardware:</strong> DASP High-Density Dynamic Acquisition Accelerometer Array</p>'
+            '<p><strong>Channel Placement:</strong><br>'
+            '• <strong>Channels 1–4:</strong> Planetary Gearbox Housing (X, Y, Z spatial axes + radial acceleration)<br>'
+            '• <strong>Channels 5–8:</strong> Parallel Shaft Gearbox Stage (Motor drive shaft, intermediate casing, output bearing)</p>'
+            '<p><strong>Acquisition Sampling Rate:</strong> 5,120 Hz / 12,000 Hz</p>'
+            '<p><strong>Fault Types Captured:</strong> Healthy baseline, chipped gear teeth, missing gear teeth, tooth root cracks, surface pitting.</p>'
+            '</div>',
+            unsafe_allow_html=True,
+        )
+
+        st.markdown(
+            '<div class="gg-card" style="margin-top:15px;">'
+            '<div class="gg-label">CASE WESTERN RESERVE UNIVERSITY (CWRU)</div>'
+            '<div class="gg-value" style="font-size:19px;margin-bottom:8px;">PCB 353B34 High-Resonance Accelerometers</div>'
+            '<p><strong>Hardware:</strong> PCB 353B34 Quartz ICP Accelerometers mounted via magnetic bases</p>'
+            '<p><strong>Channel Configuration:</strong><br>'
+            '• <strong>Drive End (DE):</strong> 12 kHz / 48 kHz motor drive end bearing housing<br>'
+            '• <strong>Fan End (FE):</strong> Motor cooling fan end bearing casing<br>'
+            '• <strong>Baseplate (BA):</strong> Rig supporting bedplate baseline sensor</p>'
+            '<p><strong>Data Format:</strong> MATLAB (.MAT v5/v7 and v7.3 HDF5 binary)</p>'
+            '</div>',
+            unsafe_allow_html=True,
+        )
+
+    st.markdown("### Why Accelerometers Are Used in Gearbox Fault Diagnosis")
+    spec_df = pd.DataFrame([
+        ["High Dynamic Frequency Bandwidth", "Tooth impact collisions generate ultrasonic shock waves with microsecond rise times; accelerometers measure from 0.5 Hz up to 30+ kHz."],
+        ["Early Stage Fault Detection", "Pitting, chipped teeth, and fatigue cracks create localized non-Gaussian acceleration spikes (high Kurtosis) weeks before thermal or displacement sensors register anomalies."],
+        ["Multi-Channel Fault Localization", "Comparing acceleration amplitude across transducers reveals proximity to the driving pinion vs output bull gear."],
+        ["Involute Impact Quantification", "Crest factor (Peak/RMS) directly reflects the ratio of impulsive tooth collision shocks against continuous background rotational meshing."],
+    ], columns=["Engineering Principle", "Industrial Significance"])
+    st.dataframe(spec_df, use_container_width=True, hide_index=True)
 
 
 # ----------------------- FLEET MONITOR -----------------------
