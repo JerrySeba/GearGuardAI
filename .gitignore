@@ -1,0 +1,13 @@
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+.env
+*.token
+.DS_Store
+
+# Large raw dataset recordings (kept locally on machine, samples are in samples/)
+BrokenTooth Data/
+Healthy Data/
+!samples/
