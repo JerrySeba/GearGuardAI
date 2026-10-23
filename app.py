@@ -1054,19 +1054,6 @@ elif sample_select != "Select sample...":
     except Exception as exc:
         processing_error = str(exc)
 
-else:
-    # Default Demonstration File: Broken Tooth
-    default_cand = [
-        ROOT / "samples" / "broken_4ch_sample.txt",
-        ROOT / "BrokenTooth Data" / "b30hz0.txt",
-        ROOT.parent / "GCEM_Hacks5.0" / "testData" / "gearboxdata" / "BrokenTooth Data" / "b30hz0.txt"
-    ]
-    for p in default_cand:
-        if p.exists():
-            active_file_name = "Demonstration: Broken Tooth (b30hz0.txt)"
-            data = read_vibration_file(p)
-            break
-
 # Run Inference if Data is Ready
 if data is not None and processing_error is None:
     try:
