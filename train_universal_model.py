@@ -200,13 +200,17 @@ def record_sample(features, label, group):
         GROUPS.append(group)
 
 
-def ingest_signal(arr, label, group_name, max_windows=20):
+def ingest_signal(arr, label, group_name, max_windows=25, min_step=128):
     if arr is None or len(arr) < 10:
         return
 
     # 1. Base 2048 segments
     n = len(arr)
-    step = max(SEGMENT_SIZE, (n - SEGMENT_SIZE) // max(1, max_windows)) if n > SEGMENT_SIZE else SEGMENT_SIZE
+    if n > SEGMENT_SIZE:
+        step = max(min_step, (n - SEGMENT_SIZE) // max(1, max_windows))
+    else:
+        step = SEGMENT_SIZE
+
     count = 0
     for start in range(0, max(1, n - SEGMENT_SIZE + 1), step):
         seg = arr[start:start + SEGMENT_SIZE]
@@ -226,14 +230,14 @@ def ingest_signal(arr, label, group_name, max_windows=20):
             seg_2ch = seg[:, :2]
             record_sample(extract_features(seg_2ch), label, f"{group_name}_2ch")
 
-        # Gain scale invariance augmentations (0.05x, 0.2x, 2.0x, 5.0x)
+        # Gain scale invariance augmentations (0.05x, 0.2x, 2.5x)
         for scale in [0.05, 0.2, 2.5]:
             record_sample(extract_features(seg * scale), label, f"{group_name}_scale_{scale}")
 
         if count >= max_windows:
             break
 
-    # 2. Micro-telemetry slices (10, 20, 50, 100 points) to train micro-sample capability
+    # 2. Micro-telemetry slices (10, 20, 30, 50, 80, 120 points) to train micro-sample capability
     micro_lens = [10, 20, 30, 50, 80, 120]
     for m_len in micro_lens:
         if n >= m_len:
@@ -248,142 +252,147 @@ def ingest_signal(arr, label, group_name, max_windows=20):
                     record_sample(extract_features(expanded_1ch), label, f"{group_name}_micro_{m_len}_1ch")
 
 
-print("=" * 70)
-print("GEARGUARD AI: INGESTING MULTI-DATASET REPOSITORIES...")
-print("=" * 70)
+def main():
+    print("=" * 70)
+    print("GEARGUARD AI: INGESTING MULTI-DATASET REPOSITORIES (MULTI-CLASS)...")
+    print("=" * 70)
 
-# 1. SpectraQuest Variable-Load Dataset (0% to 90% load)
-if HEALTHY_DIR.exists() and FAULTY_DIR.exists():
-    for f in sorted(HEALTHY_DIR.glob("*.txt")):
-        arr = parse_vibration_file(f)
-        ingest_signal(arr, "Healthy", f"SQ_{f.stem}", max_windows=15)
-    for f in sorted(FAULTY_DIR.glob("*.txt")):
-        arr = parse_vibration_file(f)
-        ingest_signal(arr, "BrokenTooth", f"SQ_{f.stem}", max_windows=15)
-    print("Ingested SpectraQuest Variable-Load Dataset.")
+    # 1. SpectraQuest Variable-Load Dataset (0% to 90% load)
+    if HEALTHY_DIR.exists() and FAULTY_DIR.exists():
+        for f in sorted(HEALTHY_DIR.glob("*.txt")):
+            arr = parse_vibration_file(f)
+            ingest_signal(arr, "Healthy Baseline", f"SQ_{f.stem}", max_windows=15, min_step=2048)
+        for f in sorted(FAULTY_DIR.glob("*.txt")):
+            arr = parse_vibration_file(f)
+            ingest_signal(arr, "Broken Tooth", f"SQ_{f.stem}", max_windows=15, min_step=2048)
+        print("Ingested SpectraQuest Variable-Load Dataset.")
 
-# 2. Southeast University (SEU) DDS Gearbox Dataset (.csv and .mat)
-if SAMPLES_DIR.exists():
-    seu_map = {
-        "SEU_Health_20_0.csv": "Healthy",
-        "SEU_Health_20_0.mat": "Healthy",
-        "SEU_Chipped_20_0.csv": "BrokenTooth",
-        "SEU_Chipped_20_0.mat": "BrokenTooth",
-        "SEU_Miss_20_0.csv": "BrokenTooth",
-        "SEU_Miss_20_0.mat": "BrokenTooth",
-        "SEU_Root_20_0.csv": "BrokenTooth",
-        "SEU_Surface_20_0.csv": "BrokenTooth",
-    }
-    for fname, lbl in seu_map.items():
+    # 2. Southeast University (SEU) DDS Gearbox Dataset (.csv and .mat)
+    if SAMPLES_DIR.exists():
+        seu_map = {
+            "SEU_Health_20_0.csv": "Healthy Baseline",
+            "SEU_Health_20_0.mat": "Healthy Baseline",
+            "SEU_Chipped_20_0.csv": "Chipped Tooth",
+            "SEU_Chipped_20_0.mat": "Chipped Tooth",
+            "SEU_Miss_20_0.csv": "Missing Tooth",
+            "SEU_Miss_20_0.mat": "Missing Tooth",
+            "SEU_Root_20_0.csv": "Tooth Root Crack",
+            "SEU_Surface_20_0.csv": "Surface Wear / Pitting",
+        }
+        for fname, lbl in seu_map.items():
+            p = SAMPLES_DIR / fname
+            if p.exists():
+                arr = parse_vibration_file(p)
+                ingest_signal(arr, lbl, f"SEU_{fname}", max_windows=30, min_step=128)
+        print("Ingested Southeast University (SEU) Benchmark Files.")
+
+    # 3. CWRU Benchmarks
+    cwru_map = [
+        ("normal_0.mat", "Healthy Baseline"),
+        ("B007_0.mat", "Bearing Fault"),
+        ("IR007_0.mat", "Bearing Fault"),
+        ("OR007@6_0.mat", "Bearing Fault"),
+    ]
+    for fname, lbl in cwru_map:
+        for base_dir in [SAMPLES_DIR, Path("/home/jeremy")]:
+            p = base_dir / fname
+            if p.exists():
+                arr = parse_vibration_file(p)
+                ingest_signal(arr, lbl, f"CWRU_{p.stem}_{base_dir.name}", max_windows=20, min_step=2048)
+    print("Ingested CWRU Bearing / Gear Datasets.")
+
+    # 4. PHM 2009 Multi-Speed / Multi-Load Runs (/home/jeremy/archive)
+    if PHM_DIR.exists():
+        phm_runs = sorted(PHM_DIR.glob("Run_*.csv"), key=lambda p: int(p.stem.split("_")[1]))
+        print(f"Found {len(phm_runs)} PHM 2009 benchmark runs. Processing representative regimes...")
+        for f in phm_runs:
+            arr = parse_vibration_file(f)
+            if arr is None or len(arr) < 2048:
+                continue
+            sub = arr[:10000, 0] - np.mean(arr[:10000, 0])
+            std = np.std(sub)
+            k = float(kurtosis(sub, fisher=False)) if std > 1e-9 else 3.0
+            if k <= 3.55:
+                ingest_signal(arr, "Healthy Baseline", f"PHM_{f.stem}", max_windows=8, min_step=4096)
+            elif k >= 4.2:
+                ingest_signal(arr, "Broken Tooth", f"PHM_{f.stem}", max_windows=8, min_step=4096)
+        print("Ingested PHM 2009 Diagnostic Runs.")
+
+    # 5. Dedicated Micro-Sample Telemetry
+    for fname, lbl in [
+        ("micro_10sample_healthy.txt", "Healthy Baseline"),
+        ("micro_10sample_broken.txt", "Broken Tooth"),
+        ("horizontal_10samples.csv", "Healthy Baseline"),
+        ("chipped_1ch_sample.csv", "Chipped Tooth"),
+        ("healthy_4ch_sample.txt", "Healthy Baseline"),
+        ("broken_4ch_sample.txt", "Broken Tooth"),
+    ]:
         p = SAMPLES_DIR / fname
         if p.exists():
             arr = parse_vibration_file(p)
-            ingest_signal(arr, lbl, f"SEU_{fname}", max_windows=20)
-    print("Ingested Southeast University (SEU) Benchmark Files.")
+            ingest_signal(arr, lbl, f"SAMPLE_{fname}", max_windows=10, min_step=256)
 
-# 3. CWRU Benchmarks
-cwru_map = [
-    ("normal_0.mat", "Healthy"),
-    ("B007_0.mat", "BrokenTooth"),
-    ("IR007_0.mat", "BrokenTooth"),
-    ("OR007@6_0.mat", "BrokenTooth"),
-]
-for fname, lbl in cwru_map:
-    for base_dir in [SAMPLES_DIR, Path("/home/jeremy")]:
-        p = base_dir / fname
-        if p.exists():
-            arr = parse_vibration_file(p)
-            ingest_signal(arr, lbl, f"CWRU_{p.stem}_{base_dir.name}", max_windows=20)
-print("Ingested CWRU Bearing / Gear Datasets.")
+    X = np.asarray(FEATURES, dtype=float)
+    y = np.asarray(LABELS)
+    groups = np.asarray(GROUPS)
 
-# 4. PHM 2009 Multi-Speed / Multi-Load Runs (/home/jeremy/archive)
-if PHM_DIR.exists():
-    phm_runs = sorted(PHM_DIR.glob("Run_*.csv"), key=lambda p: int(p.stem.split("_")[1]))
-    print(f"Found {len(phm_runs)} PHM 2009 benchmark runs. Processing representative regimes...")
-    for f in phm_runs:
-        arr = parse_vibration_file(f)
-        if arr is None or len(arr) < 2048:
-            continue
-        # Strip DC and compute kurtosis on first 10,000 points
-        sub = arr[:10000, 0] - np.mean(arr[:10000, 0])
-        std = np.std(sub)
-        k = float(kurtosis(sub, fisher=False)) if std > 1e-9 else 3.0
-        # Smooth rotation (Run 10, 20, 50, etc.)
-        if k <= 3.55:
-            ingest_signal(arr, "Healthy", f"PHM_{f.stem}", max_windows=8)
-        # Impact fault regime (Run 1, 2, 5, 75, 100, etc.)
-        elif k >= 4.2:
-            ingest_signal(arr, "BrokenTooth", f"PHM_{f.stem}", max_windows=8)
-    print("Ingested PHM 2009 Diagnostic Runs.")
+    print("\n" + "=" * 70)
+    print(f"DATASET INGESTION COMPLETE:")
+    print(f"Total training/evaluation vectors: {len(y)}")
+    print(f"Feature matrix dimensions:        {X.shape}")
+    unique_classes, class_counts = np.unique(y, return_counts=True)
+    for c, cnt in zip(unique_classes, class_counts):
+        print(f"  {c:<25}: {cnt:>5} segments")
+    print(f"Distinct dataset group domains:    {len(set(groups))}")
+    print("=" * 70)
 
-# 5. Dedicated Micro-Sample Telemetry
-for fname, lbl in [
-    ("micro_10sample_healthy.txt", "Healthy"),
-    ("micro_10sample_broken.txt", "BrokenTooth"),
-    ("horizontal_10samples.csv", "Healthy"),
-    ("chipped_1ch_sample.csv", "BrokenTooth"),
-]:
-    p = SAMPLES_DIR / fname
-    if p.exists():
-        arr = parse_vibration_file(p)
-        ingest_signal(arr, lbl, f"SAMPLE_{fname}", max_windows=10)
+    # Evaluate Held-Out Cross-Dataset Generalization
+    splitter = GroupShuffleSplit(n_splits=1, test_size=0.20, random_state=42)
+    train_idx, test_idx = next(splitter.split(X, y, groups))
 
-X = np.asarray(FEATURES, dtype=float)
-y = np.asarray(LABELS)
-groups = np.asarray(GROUPS)
+    rf = RandomForestClassifier(
+        n_estimators=300,
+        max_features="sqrt",
+        class_weight="balanced_subsample",
+        min_samples_leaf=1,
+        random_state=42,
+        n_jobs=-1,
+    )
+    rf.fit(X[train_idx], y[train_idx])
+    pred = rf.predict(X[test_idx])
+    acc = accuracy_score(y[test_idx], pred)
 
-print("\n" + "=" * 70)
-print(f"DATASET INGESTION COMPLETE:")
-print(f"Total training/evaluation vectors: {len(y)}")
-print(f"Feature matrix dimensions:        {X.shape}")
-print(f"Healthy segment count:             {int(np.sum(y == 'Healthy'))}")
-print(f"Faulty segment count:              {int(np.sum(y == 'BrokenTooth'))}")
-print(f"Distinct dataset group domains:    {len(set(groups))}")
-print("=" * 70)
+    print(f"\nHELD-OUT GROUP VALIDATION ACCURACY: {acc * 100:.2f}%")
+    print(classification_report(y[test_idx], pred, digits=4, zero_division=0))
 
-# Evaluate Held-Out Cross-Dataset Generalization
-splitter = GroupShuffleSplit(n_splits=1, test_size=0.20, random_state=42)
-train_idx, test_idx = next(splitter.split(X, y, groups))
+    # Fit Production Ensemble on 100% of Multi-Domain Data
+    print("Training Production Multi-Domain Calibrated Ensemble on 100% of data...")
+    rf_full = RandomForestClassifier(
+        n_estimators=350,
+        max_features="sqrt",
+        class_weight="balanced_subsample",
+        min_samples_leaf=1,
+        random_state=42,
+        n_jobs=-1,
+    )
+    et_full = ExtraTreesClassifier(
+        n_estimators=150,
+        max_features="sqrt",
+        class_weight="balanced_subsample",
+        min_samples_leaf=1,
+        random_state=42,
+        n_jobs=-1,
+    )
+    ensemble = VotingClassifier(
+        estimators=[("rf", rf_full), ("et", et_full)],
+        voting="soft",
+    )
+    ensemble.fit(X, y)
 
-rf = RandomForestClassifier(
-    n_estimators=300,
-    max_features="sqrt",
-    class_weight="balanced_subsample",
-    min_samples_leaf=1,
-    random_state=42,
-    n_jobs=-1,
-)
-rf.fit(X[train_idx], y[train_idx])
-pred = rf.predict(X[test_idx])
-acc = accuracy_score(y[test_idx], pred)
+    joblib.dump(ensemble, OUT_MODEL, compress=3)
+    print(f"Successfully exported production model to:\n  {OUT_MODEL}")
+    print("=" * 70)
 
-print(f"\nHELD-OUT GROUP VALIDATION ACCURACY: {acc * 100:.2f}%")
-print(classification_report(y[test_idx], pred, digits=4))
 
-# Fit Production Ensemble on 100% of Multi-Domain Data
-print("Training Production Multi-Domain Calibrated Ensemble on 100% of data...")
-rf_full = RandomForestClassifier(
-    n_estimators=350,
-    max_features="sqrt",
-    class_weight="balanced_subsample",
-    min_samples_leaf=1,
-    random_state=42,
-    n_jobs=-1,
-)
-et_full = ExtraTreesClassifier(
-    n_estimators=150,
-    max_features="sqrt",
-    class_weight="balanced_subsample",
-    min_samples_leaf=1,
-    random_state=42,
-    n_jobs=-1,
-)
-ensemble = VotingClassifier(
-    estimators=[("rf", rf_full), ("et", et_full)],
-    voting="soft",
-)
-ensemble.fit(X, y)
-
-joblib.dump(ensemble, OUT_MODEL)
-print(f"Successfully exported production model to:\n  {OUT_MODEL}")
-print("=" * 70)
+if __name__ == "__main__":
+    main()

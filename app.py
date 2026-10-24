@@ -550,12 +550,38 @@ def load_model():
 
 
 def class_name(value):
-    text = str(value).lower().replace("_", "").replace(" ", "")
-    if "broken" in text or "fault" in text or text in ("1", "1.0"):
+    val_str = str(value).strip()
+    val_lower = val_str.lower().replace("_", " ").replace("-", " ")
+    if "chipped" in val_lower:
+        return "Chipped Tooth"
+    if "missing" in val_lower or "miss" in val_lower:
+        return "Missing Tooth"
+    if "root" in val_lower or "crack" in val_lower:
+        return "Tooth Root Crack"
+    if "surface" in val_lower or "wear" in val_lower or "pitting" in val_lower:
+        return "Surface Wear / Pitting"
+    if "bearing" in val_lower or "ball" in val_lower or "race" in val_lower:
+        return "Bearing Fault"
+    if "broken" in val_lower or "fracture" in val_lower or val_lower in ("1", "1.0", "fault"):
         return "Broken Tooth"
-    if "healthy" in text or "normal" in text or text in ("0", "0.0"):
-        return "Healthy"
-    return str(value)
+    if "healthy" in val_lower or "normal" in val_lower or "baseline" in val_lower or val_lower in ("0", "0.0"):
+        return "Healthy Baseline"
+    return val_str
+
+
+def get_condition_color(condition):
+    c = str(condition).lower()
+    if "healthy" in c or "normal" in c or "baseline" in c:
+        return "#57f5a2"  # Nominal Green
+    if "bearing" in c:
+        return "#ffc857"  # Bearing Fault Amber
+    if "surface" in c or "wear" in c or "pitting" in c:
+        return "#f9ca24"  # Surface Wear Gold/Yellow
+    if "chipped" in c:
+        return "#ff9f43"  # Chipped Tooth Orange
+    if "crack" in c or "root" in c:
+        return "#ff7675"  # Root Crack Coral Red
+    return "#ff6b7a"      # Critical Neon Red (Broken Tooth / Missing Tooth)
 
 
 def get_predictions(model, features, raw_metrics=None, filename="", raw_df=None):
@@ -611,11 +637,12 @@ def signal_metrics(df, selected_channel=0):
     return rms, peak, k, crest
 
 
-def get_fault_explanation(metrics, data, selected_channel=0):
+def get_fault_explanation(metrics, data, selected_channel=0, condition="Broken Tooth"):
     """
     Physics-Grounded Diagnostic Explanation Engine:
     Translates raw vibration metrics (Kurtosis, Crest Factor, Peak, RMS, Channel Variance)
-    into specific engineering reasons explaining why the gear has failed or is bound to fail.
+    into specific engineering reasons explaining why the mechanical asset has failed or is bound to fail.
+    Tailors failure mechanics, root causes, and mitigations to the specific diagnosed multi-class regime.
     """
     rms, peak, kurt, crest = metrics
     ch = min(selected_channel, data.shape[1] - 1)
@@ -671,47 +698,121 @@ def get_fault_explanation(metrics, data, selected_channel=0):
     if n_pts <= 64:
         evidence.append(
             f"<strong>Micro-Telemetry Impact Signature:</strong> Abrupt wave-slope discontinuities detected across "
-            f"sparse telemetry ({n_pts} points), characteristic of localized structural tooth damage."
+            f"sparse telemetry ({n_pts} points), characteristic of localized structural mechanical damage."
         )
 
-    has_failed_why = (
-        "The vibration telemetry exhibits cyclical impact transients and elevated peak-to-RMS ratios caused by "
-        "loss of continuous conjugate involute tooth contact. When a chipped, cracked, or broken tooth enters the mesh zone, "
-        "the damaged tooth flank cannot sustain torque transmission smoothly, resulting in an unconstrained impact collision "
-        "between mating gear teeth upon handover."
-    )
+    cond_clean = str(condition).lower()
 
-    bound_to_fail_why = (
-        "<ul style='margin:4px 0 0 18px;padding:0;'>"
-        "<li><strong>Cyclic Bending Fatigue Overload:</strong> The sudden shock collisions generate extreme dynamic stress concentrations "
-        "at the tooth root fillet of adjacent teeth, accelerating micro-crack propagation under operational torque.</li>"
-        "<li><strong>Cascading Tooth Detachment:</strong> With each shaft revolution, degraded tooth contact forces adjacent teeth to absorb "
-        "double the design bending load, rapidly driving them toward tooth root fatigue shear.</li>"
-        "<li><strong>Catastrophic Transmission Seizure Risk:</strong> Continued operation under load will release hardened metallic spall and broken "
-        "tooth fragments into the gear mesh, resulting in secondary gear/bearing jamming and catastrophic gearbox failure.</li>"
-        "</ul>"
-    )
-
-    mitigation = (
-        "<strong>Recommended Action:</strong> De-rate operational torque immediately, arrange borescope inspection "
-        "of the driving pinion and gear teeth, and check magnetic drain plugs for metallic spall debris."
-    )
-
-    # Determine primary cause of failure based on vibration mechanics
-    if crest > 5.0 or kurt > 2.5:
-        primary_cause = "Severe Tooth Fracture / Missing Tooth Impact Shock (Cyclic Mesh Collision)"
-    elif crest > 3.8 or kurt > 1.0:
-        primary_cause = "Tooth Flank Chipping & Root Fatigue Cracking (Non-Gaussian Impact Transients)"
-    elif kurt > 0.4 or crest > 3.2:
-        primary_cause = "Incipient Tooth Surface Spalling & Mesh Involute Disruption"
+    if "chipped" in cond_clean:
+        primary_cause = "Localized Tooth Flank Chipping & Involute Impact Shock"
+        has_failed_why = (
+            "Localized spalling and cratering on the gear tooth flank has degraded the conjugate involute profile. "
+            "When the chipped region enters the meshing zone, the loss of smooth hydrodynamic oil film and tooth stiffness "
+            "triggers repetitive transient impulse shocks during rotational handover."
+        )
+        bound_to_fail_why = (
+            "<ul style='margin:4px 0 0 18px;padding:0;'>"
+            "<li><strong>Hertzian Contact Stress Concentration:</strong> Sharp crater edges magnify local contact pressure by 3×–5×, accelerating micro-pitting into adjacent teeth.</li>"
+            "<li><strong>Flank Spall Coalescence:</strong> Continued cyclic impact causes small spalls to merge into macro-craters, compromising tooth structural integrity.</li>"
+            "<li><strong>Transition to Tooth Root Fracture:</strong> Excessive shock loading elevates cyclic tensile stress at the root fillet, initiating fatigue cracks.</li>"
+            "</ul>"
+        )
+        mitigation = (
+            "<strong>Recommended Action:</strong> Perform borescope inspection to measure spall crater surface area, evaluate lubricating oil particle count for ferro-magnetic debris, and schedule gear pinion replacement before root crack initiation."
+        )
+    elif "missing" in cond_clean:
+        primary_cause = "Complete Gear Tooth Loss & Violent Re-Engagement Collision"
+        has_failed_why = (
+            "A gear tooth has detached completely from the gear wheel. During each shaft revolution, an empty mesh clearance "
+            "occurs where load transmission briefly drops to zero, followed by a violent collision as the trailing tooth slams into the mating gear."
+        )
+        bound_to_fail_why = (
+            "<ul style='margin:4px 0 0 18px;padding:0;'>"
+            "<li><strong>Shock Impact Overload:</strong> Trailing tooth absorbs up to 350% of nominal design torque instantaneously upon re-engagement.</li>"
+            "<li><strong>Rapid Cascading Tooth Shear:</strong> Severe repetitive shock forces adjacent teeth toward imminent fatigue detachment.</li>"
+            "<li><strong>Catastrophic Transmission Lockup:</strong> Unrecovered metal fragments in the casing can lodge between gears or bearing raceways, locking the gearbox.</li>"
+            "</ul>"
+        )
+        mitigation = (
+            "<strong>Recommended Action:</strong> IMMEDIATE SHUTDOWN REQUIRED. Lock out gearbox drive motor, drain oil into containment to recover liberated tooth fragments, and prepare transmission overhaul."
+        )
+    elif "crack" in cond_clean or "root" in cond_clean:
+        primary_cause = "Tooth Root Fillet Bending Fatigue Micro-Crack Propagation"
+        has_failed_why = (
+            "Cyclic bending fatigue stresses at the tooth root fillet have exceeded the endurance limit, initiating a sub-surface fatigue crack. "
+            "The cracked tooth exhibits localized non-linear compliance and diminished mesh stiffness, generating asymmetric phase-modulated tooth-mesh vibration."
+        )
+        bound_to_fail_why = (
+            "<ul style='margin:4px 0 0 18px;padding:0;'>"
+            "<li><strong>Critical Stress Intensity Threshold:</strong> Each torque cycle extends the crack length, reducing the remaining uncracked ligament cross-section.</li>"
+            "<li><strong>Sudden Overload Detachment:</strong> Momentary load spikes or braking torque will trigger brittle fast fracture of the entire tooth.</li>"
+            "<li><strong>Secondary Shaft Deflection:</strong> Asymmetric tooth stiffness induces shaft bending vibration and bearing fatigue.</li>"
+            "</ul>"
+        )
+        mitigation = (
+            "<strong>Recommended Action:</strong> De-rate operational torque by 50% immediately, conduct eddy-current or magnetic particle testing (NDT) on tooth root fillets, and replace gear set."
+        )
+    elif "surface" in cond_clean or "wear" in cond_clean or "pitting" in cond_clean:
+        primary_cause = "Contact Fatigue Micro-Pitting & Abrasive Flank Wear"
+        has_failed_why = (
+            "Sub-surface shear stresses under high contact pressures have exceeded the material shear strength, causing micro-pits and abrasive scuffing "
+            "along the pitch line. This manifests as elevated baseline RMS vibration and sideband modulation around tooth-mesh harmonics."
+        )
+        bound_to_fail_why = (
+            "<ul style='margin:4px 0 0 18px;padding:0;'>"
+            "<li><strong>Elastohydrodynamic Film Breakdown:</strong> Surface roughness asperities breach the oil film, producing high adhesive friction and scuffing.</li>"
+            "<li><strong>Transmission Error Amplification:</strong> Loss of true involute profile magnifies dynamic transmission error and audible acoustic whine.</li>"
+            "<li><strong>Pitting-to-Chipping Progression:</strong> Dense micro-pitting degrades flank surface shear resistance, accelerating macro-spall detachment.</li>"
+            "</ul>"
+        )
+        mitigation = (
+            "<strong>Recommended Action:</strong> Verify gear oil viscosity and particulate contamination (ISO 4406), perform oil filtration or flush, and schedule planned flank reprofiling or gear replacement."
+        )
+    elif "bearing" in cond_clean:
+        primary_cause = "Rolling Element / Raceway Fatigue Spall Impact Pulses"
+        has_failed_why = (
+            "Localized material fatigue or contamination on bearing raceways or rolling elements produces periodic non-synchronous impact bursts "
+            "corresponding to bearing characteristic defect pass frequencies (BPFO / BPFI / BSF)."
+        )
+        bound_to_fail_why = (
+            "<ul style='margin:4px 0 0 18px;padding:0;'>"
+            "<li><strong>Raceway Spall Coalescence:</strong> Repetitive roller passage expands the defect surface, elevating dynamic structural vibration.</li>"
+            "<li><strong>Cage Instability & Roller Skewing:</strong> Defect edges induce cage drag, frictional heating, and potential cage pocket fracture.</li>"
+            "<li><strong>Bearing Thermal Seizure:</strong> High local friction under compromised lubrication can weld raceways to rotating elements, seizing the shaft.</li>"
+            "</ul>"
+        )
+        mitigation = (
+            "<strong>Recommended Action:</strong> Perform high-frequency envelope analysis to confirm BPFO/BPFI defect harmonics, inspect lubricant grease for metallic flake contamination, and schedule bearing replacement."
+        )
     else:
-        primary_cause = "Localized Gear Mesh Stiffness Degradation & Dynamic Handover Shock"
+        # Broken Tooth / Severe Impact Fault
+        primary_cause = "Severe Tooth Fracture / Mechanical Impact Shock (Cyclic Mesh Collision)"
+        has_failed_why = (
+            "The vibration telemetry exhibits cyclical impact transients and elevated peak-to-RMS ratios caused by "
+            "loss of continuous conjugate involute tooth contact. When a broken tooth enters the mesh zone, "
+            "the damaged tooth flank cannot sustain torque transmission smoothly, resulting in an unconstrained impact collision "
+            "between mating gear teeth upon handover."
+        )
+        bound_to_fail_why = (
+            "<ul style='margin:4px 0 0 18px;padding:0;'>"
+            "<li><strong>Cyclic Bending Fatigue Overload:</strong> The sudden shock collisions generate extreme dynamic stress concentrations "
+            "at the tooth root fillet of adjacent teeth, accelerating micro-crack propagation under operational torque.</li>"
+            "<li><strong>Cascading Tooth Detachment:</strong> With each shaft revolution, degraded tooth contact forces adjacent teeth to absorb "
+            "double the design bending load, rapidly driving them toward tooth root fatigue shear.</li>"
+            "<li><strong>Catastrophic Transmission Seizure Risk:</strong> Continued operation under load will release hardened metallic spall and broken "
+            "tooth fragments into the gear mesh, resulting in secondary gear/bearing jamming and catastrophic gearbox failure.</li>"
+            "</ul>"
+        )
+        mitigation = (
+            "<strong>Recommended Action:</strong> De-rate operational torque immediately, arrange borescope inspection "
+            "of the driving pinion and gear teeth, and check magnetic drain plugs for metallic spall debris."
+        )
 
     key_points = [
-        f"<strong>Impulse Shock Severity:</strong> Crest Factor of <code>{crest:.2f}</code> ({crest:.1f}× continuous operating baseline), confirming severe localized impacts.",
-        f"<strong>Non-Gaussian Impact Spikes:</strong> Excess Kurtosis of <code>{kurt:.2f}</code> indicates acute periodic collisions during tooth mesh handover.",
-        "<strong>Imminent Operational Risk:</strong> Loss of conjugate profile forces adjacent teeth to absorb double bending load, driving rapid tooth fatigue shear.",
-        "<strong>Immediate Action:</strong> De-rate operating torque immediately and conduct borescope tooth inspection.",
+        f"<strong>Impulse Shock Severity:</strong> Crest Factor of <code>{crest:.2f}</code> ({crest:.1f}× continuous operating baseline), confirming localized mechanical impulses.",
+        f"<strong>Non-Gaussian Impact Spikes:</strong> Excess Kurtosis of <code>{kurt:.2f}</code> indicates non-linear transients during rotational handover.",
+        f"<strong>Diagnosed Fault Classification:</strong> Signature matches <code>{condition}</code> operational degradation profile.",
+        "<strong>Immediate Mitigation:</strong> De-rate operational torque and execute targeted NDT inspection as detailed above.",
     ]
 
     return {
@@ -866,9 +967,13 @@ with st.sidebar:
                 "SEU Healthy Gearbox MATLAB (SEU_Health_20_0.mat)",
                 "SEU Chipped Tooth MATLAB (SEU_Chipped_20_0.mat)",
                 "SEU Chipped Tooth 8-Ch CSV (SEU_Chipped_20_0.csv)",
+                "SEU Missing Tooth (SEU_Miss_20_0.csv)",
+                "SEU Tooth Root Crack (SEU_Root_20_0.csv)",
+                "SEU Surface Wear / Pitting (SEU_Surface_20_0.csv)",
                 "Mechanical-datasets Normal (normal_0.mat)",
                 "Mechanical-datasets Ball Fault (B007_0.mat)",
                 "Mechanical-datasets Inner Race (IR007_0.mat)",
+                "Mechanical-datasets Outer Race (OR007@6_0.mat)",
                 "Micro 10-Sample Broken Tooth (10 Points)",
                 "Micro 10-Sample Healthy Baseline (10 Points)",
                 "Horizontal 10-Sample Vector (1 Row CSV)",
@@ -956,7 +1061,7 @@ if uploaded_files:
                     "Confidence": f"{b_conf:.1f}%",
                     "RMS (g)": f"{b_rms:.4g}",
                     "Peak (g)": f"{b_peak:.4g}",
-                    "ISO Status": "CRITICAL" if b_mode == "Broken Tooth" else "NORMAL"
+                    "ISO Status": "NORMAL" if "Healthy" in b_mode else ("CRITICAL" if b_mode in ["Broken Tooth", "Missing Tooth"] else "WARNING")
                 })
             except Exception as e:
                 batch_summary.append({
@@ -1010,6 +1115,16 @@ elif sample_select != "Select sample...":
             "SEU Chipped Tooth 8-Ch CSV (SEU_Chipped_20_0.csv)": [
                 ROOT / "samples" / "SEU_Chipped_20_0.csv",
             ],
+            "SEU Missing Tooth (SEU_Miss_20_0.csv)": [
+                ROOT / "samples" / "SEU_Miss_20_0.csv",
+                ROOT / "samples" / "SEU_Miss_20_0.mat",
+            ],
+            "SEU Tooth Root Crack (SEU_Root_20_0.csv)": [
+                ROOT / "samples" / "SEU_Root_20_0.csv",
+            ],
+            "SEU Surface Wear / Pitting (SEU_Surface_20_0.csv)": [
+                ROOT / "samples" / "SEU_Surface_20_0.csv",
+            ],
             "Mechanical-datasets Normal (normal_0.mat)": [
                 ROOT / "samples" / "normal_0.mat",
                 ROOT.parent / "normal_0.mat",
@@ -1021,6 +1136,10 @@ elif sample_select != "Select sample...":
             "Mechanical-datasets Inner Race (IR007_0.mat)": [
                 ROOT / "samples" / "IR007_0.mat",
                 ROOT.parent / "IR007_0.mat",
+            ],
+            "Mechanical-datasets Outer Race (OR007@6_0.mat)": [
+                ROOT / "samples" / "OR007@6_0.mat",
+                ROOT.parent / "OR007@6_0.mat",
             ],
             "Micro 10-Sample Broken Tooth (10 Points)": [
                 ROOT / "samples" / "micro_10sample_broken.txt",
@@ -1097,7 +1216,7 @@ if page == "⌂  Dashboard":
 
         a, b, c = st.columns(3)
         with a:
-            render_metric_card("Supported Classes", "Healthy / Broken Tooth", subtext="Multi-Fault Isolation")
+            render_metric_card("Supported Classes", "7 Fine-Grained Classes", subtext="Multi-Fault Isolation")
         with b:
             render_metric_card("Channel Support", "Universal (1 to 16+ Ch)", subtext="Auto-Projection Engine")
         with c:
@@ -1120,7 +1239,7 @@ if page == "⌂  Dashboard":
         if batch_summary:
             st.markdown("### ▦ Multi-Dataset Batch Telemetry Matrix")
             b_total = len(batch_summary)
-            b_faults = sum(1 for r in batch_summary if "Broken" in str(r.get("Condition", "")))
+            b_faults = sum(1 for r in batch_summary if "Healthy" not in str(r.get("Condition", "")))
             b_healthy = b_total - b_faults
             
             bc1, bc2, bc3 = st.columns(3)
@@ -1129,7 +1248,7 @@ if page == "⌂  Dashboard":
             with bc2:
                 render_metric_card("Healthy Units", f"{b_healthy} Units", color="#57f5a2", subtext="Nominal Vibration")
             with bc3:
-                render_metric_card("Defects / Alerts", f"{b_faults} Critical", color="#ff6b7a" if b_faults > 0 else "#36e6f5", subtext="Immediate Inspection")
+                render_metric_card("Defects / Alerts", f"{b_faults} Detected", color="#ff6b7a" if b_faults > 0 else "#36e6f5", subtext="Action Required")
             
             st.dataframe(pd.DataFrame(batch_summary), use_container_width=True, hide_index=True)
             st.markdown("---")
@@ -1142,14 +1261,15 @@ if page == "⌂  Dashboard":
                 unsafe_allow_html=True
             )
 
-        if overall == "Broken Tooth":
-            fault_info = get_fault_explanation(metrics, data, channel)
+        if "Healthy" not in overall:
+            fault_info = get_fault_explanation(metrics, data, channel, condition=overall)
             key_points_html = "".join([f"<li style='margin-bottom:6px;'>{p}</li>" for p in fault_info["key_points"]])
             evidence_html = "".join([f"<li style='margin-bottom:4px;'>{e}</li>" for e in fault_info["evidence"]])
+            fault_border_color = get_condition_color(overall)
             st.markdown(
-                f'<div class="gg-danger" style="line-height:1.6;padding:16px 20px;">'
-                f'<div style="font-size:16px;font-weight:700;margin-bottom:8px;color:#ff6b7a;">🚨 FAULT ALERT — Mechanical Gear Fault Detected</div>'
-                f'<div style="background:rgba(255,107,122,0.14);border-left:4px solid #ff6b7a;padding:8px 12px;margin:8px 0 10px 0;border-radius:4px;">'
+                f'<div class="gg-danger" style="line-height:1.6;padding:16px 20px;border-left:4px solid {fault_border_color};">'
+                f'<div style="font-size:16px;font-weight:700;margin-bottom:8px;color:{fault_border_color};">🚨 FAULT ALERT — {overall} Detected</div>'
+                f'<div style="background:rgba(255,107,122,0.14);border-left:4px solid {fault_border_color};padding:8px 12px;margin:8px 0 10px 0;border-radius:4px;">'
                 f'<span style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.8px;color:#ff9da8;">Main Cause of Failure:</span><br>'
                 f'<span style="font-size:14px;font-weight:600;color:#ffffff;">{fault_info["primary_cause"]}</span>'
                 f'</div>'
@@ -1173,7 +1293,7 @@ if page == "⌂  Dashboard":
             st.markdown(
                 f'<div class="gg-ok">'
                 f'✓ <strong>HEALTHY CLASSIFICATION</strong> — The system classified the vibration telemetry as Nominal. '
-                f'Continuous smooth involute contact confirmed with nominal Gaussian vibration distribution '
+                f'Continuous smooth conjugate involute contact confirmed with nominal Gaussian vibration distribution '
                 f'(Crest Factor: <code>{crest:.2f}</code>, Kurtosis: <code>{kurt:.2f}</code>, RMS: <code>{rms:.4g} g</code>). '
                 f'Continue standard SCADA monitoring.'
                 f'</div>',
@@ -1181,7 +1301,7 @@ if page == "⌂  Dashboard":
             )
 
         st.markdown("")
-        cond_color = "#ff6b7a" if overall == "Broken Tooth" else "#57f5a2"
+        cond_color = get_condition_color(overall)
         c1, c2, c3, c4 = st.columns(4)
         with c1:
             render_metric_card("DETECTED CONDITION", overall, color=cond_color, subtext=f"{fraction:.1f}% Segment Agreement")
@@ -1221,7 +1341,7 @@ if page == "⌂  Dashboard":
             x=count_df["Condition"],
             y=count_df["Segments"],
             marker_color=[
-                "#ff7185" if name == "Broken Tooth" else "#45e6a2"
+                get_condition_color(name)
                 for name in count_df["Condition"]
             ],
             text=count_df["Segments"],
@@ -1509,7 +1629,7 @@ elif page == "▦  Fleet Monitor":
     st.markdown("### Active Uploaded Telemetry Status")
     if data is not None and predictions is not None and not processing_error:
         overall = str(pd.Series(predictions).mode().iloc[0])
-        cond_color = "#ff6b7a" if overall == "Broken Tooth" else "#57f5a2"
+        cond_color = get_condition_color(overall)
         fc1, fc2, fc3, fc4 = st.columns(4)
         with fc1:
             render_metric_card("Source File", active_file_name, subtext="Active Telemetry Stream")
@@ -1535,7 +1655,7 @@ elif page == "▤  Diagnosis Log":
         )
     else:
         total_logs = len(logs)
-        fault_logs = sum(1 for item in logs if item.get("Predicted condition") == "Broken Tooth")
+        fault_logs = sum(1 for item in logs if "Healthy" not in str(item.get("Predicted condition", "")))
         healthy_logs = total_logs - fault_logs
         lc1, lc2, lc3 = st.columns(3)
         with lc1:
@@ -1543,7 +1663,7 @@ elif page == "▤  Diagnosis Log":
         with lc2:
             render_metric_card("Healthy Evaluations", f"{healthy_logs}", color="#57f5a2", subtext="Nominal Condition")
         with lc3:
-            render_metric_card("Fault Alerts Logged", f"{fault_logs}", color="#ff6b7a" if fault_logs > 0 else "#36e6f5", subtext="Broken Tooth / Impact")
+            render_metric_card("Fault Alerts Logged", f"{fault_logs}", color="#ff6b7a" if fault_logs > 0 else "#36e6f5", subtext="Multi-Class Faults")
 
         log_df = pd.DataFrame(logs)
         st.dataframe(log_df, use_container_width=True, hide_index=True)
@@ -1567,7 +1687,7 @@ elif page == "⚙  Configuration":
             '<div class="gg-card">'
             '<div class="gg-label">CLASSIFICATION & FEATURE ENGINE</div>'
             '<div class="gg-value" style="font-size:20px;margin-bottom:10px;">Hybrid Random Forest + Kinematics</div>'
-            '<p><strong>Model Backbone:</strong> Balanced Random Forest Classifier (200 Estimators) + Cross-Domain Physics Calibration</p>'
+            '<p><strong>Model Backbone:</strong> Multi-Class Calibrated Voting Ensemble (Random Forest + Extra Trees)</p>'
             '<p><strong>Universal Feature Representation:</strong> 28 statistical descriptors (7 per virtual channel × 4 channels)</p>'
             '<p><strong>Adaptive Channel Projector:</strong> Dynamic mapping supporting 1, 2, 3, 4, 8, or N sensor channels</p>'
             '</div>',
@@ -1581,7 +1701,7 @@ elif page == "⚙  Configuration":
             f'<div class="gg-value" style="font-size:20px;margin-bottom:10px;">Universal Multi-Format Edge Engine</div>'
             f'<p><strong>Evaluation Window:</strong> {SEGMENT_SIZE} samples per segment (auto-expands short 10-point recordings)</p>'
             f'<p><strong>Supported Formats:</strong> .CSV (PHM 2009 / SEU), .MAT (MATLAB Binary), .TXT (SpectraQuest), .DAT, .TSV</p>'
-            f'<p><strong>Supported Fault Classes:</strong> Healthy Baseline vs. Broken Tooth / Mechanical Impact Fault</p>'
+            f'<p><strong>Supported Fault Classes:</strong> 7 Fine-Grained Classes (Healthy Baseline, Broken Tooth, Chipped Tooth, Missing Tooth, Tooth Root Crack, Surface Wear / Pitting, Bearing Fault)</p>'
             f'</div>',
             unsafe_allow_html=True,
         )

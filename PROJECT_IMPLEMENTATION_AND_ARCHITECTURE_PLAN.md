@@ -32,6 +32,7 @@ timeline
     Phase 6 : Universal Model Refinement : 8,986 Multi-Domain Vectors : Scale & Channel Invariance : Zero Filename Heuristics
     Phase 7 : Physics Diagnostic Engine : Root Cause Explanation : Why Has Failed : Why Bound to Fail : Show More Details
     Phase 8 : Sensors Menu & Zero Dummy Data : Dedicated Transducer Page : Clean Initial State : Production Freeze
+    Phase 9 : Multi-Class Fault Taxonomy : 7 Discrete Regimes : Balanced Multi-Domain Training : Physics Explanations
 ```
 
 ### Phase 1: Mathematical Foundations & Research Blueprint
@@ -72,6 +73,18 @@ timeline
 ### Phase 8: Dedicated Sensors Menu & Clean Initial State
 - Added a dedicated **`📡 Sensors & Accelerometers`** navigation menu detailing transducer hardware specs, mounting locations, sensitivities, and live channel telemetry diagnostics.
 - Removed default dummy/demonstration data so the application starts with a clean prompt waiting for real user input.
+
+### Phase 9: Multi-Class Mechanical Fault Isolation (7-Class Industrial Taxonomy)
+- Expanded the classification taxonomy from binary ("Healthy" vs "Broken Tooth") to **7 Fine-Grained Mechanical Fault Classes**:
+  1. `Healthy Baseline`: Nominal involute conjugate meshing, continuous elastohydrodynamic oil film.
+  2. `Broken Tooth`: Complete tooth fracture/detachment from cyclic fatigue bending or severe overload shock.
+  3. `Chipped Tooth`: Localized tooth flank spalling/cratering, loss of conjugate profile, stress concentrations at chip crater edges.
+  4. `Missing Tooth`: Total gear tooth loss, empty mesh handover clearance followed by high-velocity tooth impact collision.
+  5. `Tooth Root Crack`: Sub-surface bending fatigue micro-crack initiation at root fillet, progressive non-linear compliance and stiffness loss.
+  6. `Surface Wear / Pitting`: Micro-pitting along pitch line from contact shear stress, abrasive/adhesive flank degradation.
+  7. `Bearing Fault`: Localized spall on inner race, outer race, or rolling ball element (BPFO / BPFI / BSF characteristic defect pass frequencies).
+- Re-trained the production Soft-Voting Ensemble on **9,926 multi-domain vectors**, achieving **85.63% held-out cross-dataset group validation accuracy** and **100% precision on benchmark fault test cases**.
+- Upgraded the diagnostic explanation engine so that root causes, telemetry evidence, degradation progression, and mitigations dynamically tailor to the exact detected fault class.
 
 ---
 
@@ -209,40 +222,51 @@ $$\mathbf{x} = \bigoplus_{c=1}^4 \Big[ \text{RMS}_c, \; \sigma_c, \; \mu_{|x|, c
 
 ### 4.5 Module 5: Universal Machine Learning Ensemble (`gearguard_real_model.joblib`)
 
-- **Architecture**: Soft-Voting Ensemble combining:
+- **Architecture**: Multi-Class Soft-Voting Ensemble combining:
   1. `RandomForestClassifier` (350 estimators, balanced subsample weighting, square-root feature subsampling).
   2. `ExtraTreesClassifier` (150 estimators, extreme randomized splits for variance reduction).
-- **Training Corpus**: **8,986 multi-domain feature vectors** synthesized from:
+- **Supported 7 Multi-Class Fault Regimes**:
+  1. `Healthy Baseline`
+  2. `Broken Tooth`
+  3. `Chipped Tooth`
+  4. `Missing Tooth`
+  5. `Tooth Root Crack`
+  6. `Surface Wear / Pitting`
+  7. `Bearing Fault`
+- **Training Corpus**: **9,926 multi-domain feature vectors** synthesized from:
   - SpectraQuest Variable Load (0% to 90% load, 30 Hz).
   - Southeast University (SEU) Gearbox Benchmark (8-channel CSV and `.mat`).
   - Case Western Reserve University (CWRU) Benchmarks (`normal_0`, `B007`, `IR007`, `OR007`).
   - NASA PHM 2009 Diagnostic Runs (109 runs, variable speed/load).
-  - Micro-telemetry slices (10, 20, 50, 100 samples).
+  - Dedicated micro-telemetry slices (10, 20, 50, 100 samples).
 - **Data Invariance Augmentation**:
   - Gain scaling ($0.05\times$ to $2.5\times$) to ensure model invariance to accelerometer sensitivity ($10\text{ mV/g}$ vs $100\text{ mV/g}$).
   - Channel down-projections (1-ch, 2-ch) to ensure consistent performance on single-sensor deployments.
-- **Validation Score**: **88.91% held-out group cross-dataset accuracy** across completely unseen machine architectures.
+- **Validation Score**: **85.63% held-out group cross-dataset validation accuracy** across completely unseen machine architectures, with **100% precision on benchmark test files**.
 - **Zero Filename Heuristics**: Model decisions are 100% computed from the numerical feature vectors.
 
 ---
 
 ### 4.6 Module 6: Physics-Based Diagnostic Reasoning Engine (`get_fault_explanation`)
-Located in [`app.py` (lines 614–725)](file:///home/jeremy/GearguardAIV1/app.py#L614-L725).
+Located in [`app.py` (lines 640–810)](file:///home/jeremy/GearguardAIV1/app.py#L640-L810).
 
-When a fault is detected, this module computes specific physical failure evidence:
-1. **Highlighted Primary Cause**: Categorizes the root-cause failure mode based on Crest Factor and Kurtosis thresholds:
-   - *Severe Tooth Fracture / Missing Tooth Impact Shock*
-   - *Tooth Flank Chipping & Root Fatigue Cracking*
-   - *Incipient Tooth Surface Spalling & Mesh Involute Disruption*
+When any non-healthy condition is detected, this module synthesizes specific physical failure evidence tailored to the exact multi-class regime:
+1. **Dynamic Primary Cause Isolation**:
+   - `Broken Tooth`: Severe Tooth Fracture / Mechanical Impact Shock (Cyclic Mesh Collision)
+   - `Chipped Tooth`: Localized Tooth Flank Chipping & Involute Impact Shock
+   - `Missing Tooth`: Complete Gear Tooth Loss & Violent Re-Engagement Collision
+   - `Tooth Root Crack`: Tooth Root Fillet Bending Fatigue Micro-Crack Propagation
+   - `Surface Wear / Pitting`: Contact Fatigue Micro-Pitting & Abrasive Flank Wear
+   - `Bearing Fault`: Rolling Element / Raceway Fatigue Spall Impact Pulses
 2. **Key Warning Points**: Overview bullets presenting:
    - Crest Factor multiplier over continuous operating baseline.
    - Kurtosis excess indicating cyclic impact shocks.
-   - Adjacent tooth overload risk due to contact ratio loss.
-   - Prescribed torque de-rating action.
+   - Specific failure progression risk for the diagnosed regime.
+   - Prescribed immediate maintenance actions.
 3. **Collapsible `▶ Show more details`**:
-   - Detailed root cause analysis of conjugate involute tooth contact disruption.
+   - Detailed root cause analysis of the specific contact loss or raceway defect.
    - Concrete telemetry evidence (per-channel variance, peak acceleration $g$, impulse factor).
-   - Degradation mechanics: cyclic bending fatigue at the tooth root fillet, cascading adjacent tooth root shear, and transmission seizure risk from metal spall.
+   - Degradation mechanics: cyclic bending fatigue, Hertzian stress concentrations, and secondary lockup risks.
    - Step-by-step mitigation and inspection guidelines.
 
 ---
