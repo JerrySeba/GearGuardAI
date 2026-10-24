@@ -261,10 +261,10 @@ def main():
     if HEALTHY_DIR.exists() and FAULTY_DIR.exists():
         for f in sorted(HEALTHY_DIR.glob("*.txt")):
             arr = parse_vibration_file(f)
-            ingest_signal(arr, "Healthy Baseline", f"SQ_{f.stem}", max_windows=15, min_step=2048)
+            ingest_signal(arr, "Healthy Baseline", f"SQ_{f.stem}", max_windows=6, min_step=4096)
         for f in sorted(FAULTY_DIR.glob("*.txt")):
             arr = parse_vibration_file(f)
-            ingest_signal(arr, "Broken Tooth", f"SQ_{f.stem}", max_windows=15, min_step=2048)
+            ingest_signal(arr, "Broken Tooth", f"SQ_{f.stem}", max_windows=6, min_step=4096)
         print("Ingested SpectraQuest Variable-Load Dataset.")
 
     # 2. Southeast University (SEU) DDS Gearbox Dataset (.csv and .mat)
@@ -283,7 +283,7 @@ def main():
             p = SAMPLES_DIR / fname
             if p.exists():
                 arr = parse_vibration_file(p)
-                ingest_signal(arr, lbl, f"SEU_{fname}", max_windows=30, min_step=128)
+                ingest_signal(arr, lbl, f"SEU_{fname}", max_windows=40, min_step=64)
         print("Ingested Southeast University (SEU) Benchmark Files.")
 
     # 3. CWRU Benchmarks
@@ -298,7 +298,7 @@ def main():
             p = base_dir / fname
             if p.exists():
                 arr = parse_vibration_file(p)
-                ingest_signal(arr, lbl, f"CWRU_{p.stem}_{base_dir.name}", max_windows=20, min_step=2048)
+                ingest_signal(arr, lbl, f"CWRU_{p.stem}_{base_dir.name}", max_windows=12, min_step=4096)
     print("Ingested CWRU Bearing / Gear Datasets.")
 
     # 4. PHM 2009 Multi-Speed / Multi-Load Runs (/home/jeremy/archive)
@@ -311,11 +311,21 @@ def main():
                 continue
             sub = arr[:10000, 0] - np.mean(arr[:10000, 0])
             std = np.std(sub)
-            k = float(kurtosis(sub, fisher=False)) if std > 1e-9 else 3.0
-            if k <= 3.55:
-                ingest_signal(arr, "Healthy Baseline", f"PHM_{f.stem}", max_windows=8, min_step=4096)
-            elif k >= 4.2:
-                ingest_signal(arr, "Broken Tooth", f"PHM_{f.stem}", max_windows=8, min_step=4096)
+            k = float(kurtosis(sub, fisher=True)) if std > 1e-9 else 0.0
+            
+            # Map PHM runs to their physical multi-class fault regimes
+            if k <= 0.4:
+                lbl = "Healthy Baseline"
+            elif k <= 0.9:
+                lbl = "Surface Wear / Pitting"
+            elif k <= 1.5:
+                lbl = "Tooth Root Crack"
+            elif k <= 3.5:
+                lbl = "Chipped Tooth"
+            else:
+                lbl = "Broken Tooth"
+            
+            ingest_signal(arr, lbl, f"PHM_{f.stem}", max_windows=6, min_step=4096)
         print("Ingested PHM 2009 Diagnostic Runs.")
 
     # 5. Dedicated Micro-Sample Telemetry

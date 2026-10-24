@@ -604,17 +604,22 @@ def get_predictions(model, features, raw_metrics=None, filename="", raw_df=None)
     names = [class_name(x) for x in predictions]
 
     confidence = None
+    class_probs = {}
     if hasattr(model, "predict_proba"):
         try:
             probabilities = model.predict_proba(features)
             confidence = probabilities.max(axis=1) * 100
+            if hasattr(model, "classes_"):
+                mean_p = np.mean(probabilities, axis=0) * 100
+                for c, p in zip(model.classes_, mean_p):
+                    class_probs[class_name(c)] = float(p)
         except Exception:
             confidence = None
 
     if confidence is None:
         confidence = np.full(len(names), 95.0)
 
-    return names, confidence
+    return names, confidence, class_probs
 
 
 def signal_metrics(df, selected_channel=0):
@@ -1018,6 +1023,7 @@ features = None
 segments = None
 predictions = None
 confidence = None
+class_probs = {}
 processing_error = None
 file_load = None
 metrics = None
@@ -1047,7 +1053,7 @@ if uploaded_files:
                 b_metrics = signal_metrics(b_df, 0)
                 b_feats, b_segs = build_segments(b_df)
                 if model is not None:
-                    b_p, b_c = get_predictions(model, b_feats, raw_metrics=b_metrics, filename=f.name, raw_df=b_df)
+                    b_p, b_c, _ = get_predictions(model, b_feats, raw_metrics=b_metrics, filename=f.name, raw_df=b_df)
                     b_mode = str(pd.Series(b_p).mode().iloc[0])
                     b_conf = float(np.mean(b_c)) if b_c is not None else 95.0
                 else:
@@ -1186,7 +1192,7 @@ if data is not None and processing_error is None:
         if model is None:
             processing_error = model_error
         else:
-            predictions, confidence = get_predictions(
+            predictions, confidence, class_probs = get_predictions(
                 model, features, raw_metrics=metrics, filename=active_file_name, raw_df=data
             )
 
@@ -1316,6 +1322,16 @@ if page == "⌂  Dashboard":
             f"Active file: **{active_file_name}** • {data.shape[1]} Vibration Channel(s) Active • "
             "Universal Channel Projection & Cross-Domain Calibration Active."
         )
+
+        if class_probs:
+            st.markdown("### Multi-Class Fault Probability Spectrum")
+            sorted_probs = sorted(class_probs.items(), key=lambda kv: kv[1], reverse=True)
+            p_cols = st.columns(min(len(sorted_probs), 4))
+            for idx, (p_class, p_val) in enumerate(sorted_probs[:4]):
+                with p_cols[idx]:
+                    p_color = get_condition_color(p_class)
+                    rank_label = "PRIMARY DIAGNOSIS" if idx == 0 else f"SECONDARY CANDIDATE #{idx}"
+                    render_metric_card(rank_label, p_class, color=p_color, subtext=f"Likelihood: {p_val:.1f}%")
 
         st.markdown("### Signal Health Metrics")
         m1, m2, m3, m4 = st.columns(4)
